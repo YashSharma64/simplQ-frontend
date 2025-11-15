@@ -9,32 +9,35 @@ export class ErrorBoundary extends React.Component {
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError() {
-    // Update state so the next render will show the fallback UI.
-    // eslint-disable-next-line no-console
-    console.log(
-      'Something caused a crash during rendering, falling back to 404 url, please try again...'
-    );
+  static getDerivedStateFromError(error) {
+    // Provide a more descriptive Sentry breadcrumb
+    Sentry.addBreadcrumb({
+      category: 'ErrorBoundary',
+      message: `Render crash detected: ${error?.message}`,
+      level: 'error'
+    });
+
     return { hasError: true };
   }
 
   componentDidCatch(error, errorInfo) {
-    // You can also log the error to an error reporting service
-    // logErrorToMyService(error, errorInfo);
-    // log error to sentry for alerting
-    let eventId;
+    // Send exception to sentry
     Sentry.withScope((scope) => {
       scope.setTag('Caught-at', 'Error Boundary');
       scope.setExtras(errorInfo);
-      eventId = Sentry.captureException(error);
+      Sentry.captureException(error);
     });
-    // eslint-disable-next-line no-console
-    console.log(`Sentry exception captured, event id is ${eventId}`);
+  }
+
+  componentDidUpdate(prevProps) {
+    // Allow ErrorBoundary to recover when children change
+    if (prevProps.children !== this.props.children && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
   }
 
   render() {
     if (this.state.hasError) {
-      // You can render any custom fallback UI
       return <PageNotFound />;
     }
     return this.props.children;
